@@ -1,0 +1,33 @@
+name: Stock Data Momentum Tracker
+
+on:
+  schedule:
+    - cron: "0,15,30,45 10-18 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  run-tracker:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tracker
+        run: python stock_data.py
+
+      - name: Commit Excel updates
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "actions@github.com"
+          git add data/stock_data.xlsx
+          git commit -m "Auto update stock data" || echo "No changes"
+          git push
