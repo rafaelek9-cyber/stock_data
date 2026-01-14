@@ -48,7 +48,7 @@ def get_top_20_gainers():
 
     for t in tickers:
         try:
-            hist = yf.Ticker(t).history(period="1d", interval="5m", prepost=True)
+            hist = yf.Ticker(t).history(period="1d", interval="15m", prepost=True)
             if len(hist) >= 2:
                 pct = (hist["Close"].iloc[-1] - hist["Open"].iloc[0]) / hist["Open"].iloc[0] * 100
                 data.append((t, pct))
@@ -87,7 +87,11 @@ def update_prices(df, current_time):
         ticker = row["Ticker"]
 
         try:
-            hist = yf.Ticker(ticker).history(period="1d", interval="5m", prepost=True)
+    hist = yf.download(ticker, interval="15m", period="1d", prepost=True)
+except Exception as e:
+    print(f"Download failed for {ticker}: {e}")
+    continue
+
 if hist.empty:
     continue
 
