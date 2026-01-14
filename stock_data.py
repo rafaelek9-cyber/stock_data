@@ -4,6 +4,8 @@ import pytz
 from datetime import datetime
 import os
 
+os.makedirs("data", exist_ok=True)
+
 DATA_PATH = "data/stock_data.xlsx"
 TIMEZONE = pytz.timezone("US/Eastern")
 
