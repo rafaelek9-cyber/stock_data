@@ -28,6 +28,12 @@ jobs:
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "actions@github.com"
-          git add data/stock_data.xlsx
-          git commit -m "Auto update stock data" || echo "No changes"
-          git push
+
+            if [ -f data/stock_data.xlsx ]; then
+              git add data/stock_data.xlsx
+              git commit -m "Auto update stock data" || echo "No changes"
+              git push
+            else
+              echo "Excel file not created yet — skipping commit"
+              fi
+
