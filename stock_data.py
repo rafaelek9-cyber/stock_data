@@ -87,8 +87,10 @@ def update_prices(df, current_time):
 
     for i, row in df.iterrows():
         ticker = row["Ticker"]
+# --- DOWNLOAD INTRADAY DATA ---
+hist = None
 
-        try:
+try:
     hist = yf.download(
         ticker,
         interval="15m",
@@ -100,7 +102,7 @@ except Exception as e:
     print(f"Download failed for {ticker}: {e}")
     continue
 
-if hist.empty:
+if hist is None or hist.empty:
     continue
 
 price = hist["Close"].iloc[-1]
