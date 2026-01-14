@@ -62,6 +62,8 @@ def get_top_20_gainers():
 # ---------------- LOAD / INIT DATAFRAME ---------------- #
 
 def load_or_create_df():
+    os.makedirs("data", exist_ok=True)
+
     if os.path.exists(DATA_PATH):
         return pd.read_excel(DATA_PATH)
 
@@ -72,8 +74,9 @@ def load_or_create_df():
         if col != "Ticker":
             df[col] = None
 
+    # 🚨 FORCE FILE CREATION IMMEDIATELY
+    df.to_excel(DATA_PATH, index=False)
     return df
-
 
 # ---------------- UPDATE PRICES ---------------- #
 
@@ -84,8 +87,11 @@ def update_prices(df, current_time):
         ticker = row["Ticker"]
 
         try:
-            price = yf.Ticker(ticker).fast_info["last_price"]
-        except:
+            hist = yf.Ticker(ticker).history(period="1d", interval="5m", prepost=True)
+if hist.empty:
+    continue
+
+price = hist["Close"].iloc[-1]
             continue
 
         df.at[i, f"{current_time} Price"] = price
@@ -134,13 +140,11 @@ def main():
     now = datetime.now(TIMEZONE).strftime("%H:%M")
 
     if now not in TIMES:
-        # Snap to most recent valid interval
         now = max(t for t in TIMES if t <= now)
 
     df = load_or_create_df()
     update_prices(df, now)
     update_momentum_flags(df)
 
-    os.makedirs("data", exist_ok=True)
     df.to_excel(DATA_PATH, index=False)
     print(f"Updated data for {now}")
