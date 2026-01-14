@@ -89,7 +89,13 @@ def update_prices(df, current_time):
         ticker = row["Ticker"]
 
         try:
-    hist = yf.download(ticker, interval="15m", period="1d", prepost=True)
+    hist = yf.download(
+        ticker,
+        interval="15m",
+        period="1d",
+        prepost=True,
+        progress=False
+    )
 except Exception as e:
     print(f"Download failed for {ticker}: {e}")
     continue
