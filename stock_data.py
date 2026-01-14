@@ -134,9 +134,8 @@ def main():
     now = datetime.now(TIMEZONE).strftime("%H:%M")
 
     if now not in TIMES:
-    # Snap to most recent valid interval
-    now = max(t for t in TIMES if t <= now)
-
+        # Snap to most recent valid interval
+        now = max(t for t in TIMES if t <= now)
 
     df = load_or_create_df()
     update_prices(df, now)
@@ -145,7 +144,3 @@ def main():
     os.makedirs("data", exist_ok=True)
     df.to_excel(DATA_PATH, index=False)
     print(f"Updated data for {now}")
-
-
-if __name__ == "__main__":
-    main()
