@@ -134,8 +134,9 @@ def main():
     now = datetime.now(TIMEZONE).strftime("%H:%M")
 
     if now not in TIMES:
-        print("Not a scheduled interval.")
-        return
+    # Snap to most recent valid interval
+    now = max(t for t in TIMES if t <= now)
+
 
     df = load_or_create_df()
     update_prices(df, now)
