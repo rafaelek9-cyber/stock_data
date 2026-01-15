@@ -1,6 +1,7 @@
 import os
 import yfinance as yf
 import pandas as pd
+import openpyxl
 from datetime import datetime, time
 
 # =========================
