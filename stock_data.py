@@ -1,85 +1,85 @@
+import os
 import yfinance as yf
 import pandas as pd
-import pytz
-from datetime import datetime
-import os
+from datetime import datetime, time
 
-# ---------------- SETUP ---------------- #
-
-os.makedirs("data", exist_ok=True)
+# =========================
+# CONFIG
+# =========================
 
 DATA_PATH = "data/stock_data.xlsx"
-TIMEZONE = pytz.timezone("US/Eastern")
 
+TIMES = [
+    time(7, 0),
+    time(7, 15),
+    time(7, 30),
+    time(7, 45),
+    time(8, 0),
+    time(8, 15),
+    time(8, 30),
+    time(8, 45),
+    time(9, 0),
+    time(9, 15),
+    time(9, 30),
+    time(9, 45),
+    time(10, 0),
+    time(10, 15),
+    time(10, 30),
+    time(10, 45),
+    time(11, 0),
+    time(11, 15),
+    time(11, 30),
+    time(11, 45),
+    time(12, 0),
+]
 
-# ---------------- TIME SETUP ---------------- #
-
-def generate_time_slots():
-    return pd.date_range(
-        start="06:00",
-        end="14:00",
-        freq="15min"
-    ).strftime("%H:%M").tolist()
-
-
-TIMES = generate_time_slots()
-
-
-# ---------------- COLUMN SETUP ---------------- #
+# =========================
+# HELPERS
+# =========================
 
 def build_columns(times):
-    cols = ["Ticker"]
+    cols = ["Ticker", "7:00 Price"]
 
-    for i, t in enumerate(times):
-        cols.append(f"{t} Price")
-        if i > 0:
-            cols.append(f"% {times[i-1]}→{t}")
+    for t in times[1:]:
+        label = t.strftime("%H:%M")
+        cols.append(f"{label} Price")
+        cols.append(f"{label} % Change")
 
-    cols += ["TOTAL % 6:00→2:00", "Momentum_3x", "Momentum_Break"]
+    cols.append("Total % Change")
     return cols
 
 
-# ---------------- TOP GAINERS ---------------- #
-
 def get_top_20_gainers():
-    tickers = [
-        "AAPL", "TSLA", "AMD", "NVDA", "META", "AMZN", "MSFT",
-        "PLTR", "RIVN", "COIN", "SOFI", "F", "BAC", "INTC",
-        "MU", "AI", "DKNG", "SNAP", "UPST", "AFRM"
-    ]
-
-    data = []
-
-    for t in tickers:
-        try:
-            hist = yf.Ticker(t).history(
-                period="1d",
-                interval="15m",
-                prepost=True
-            )
-            if len(hist) >= 2:
-                pct = (
-                    (hist["Close"].iloc[-1] - hist["Open"].iloc[0])
-                    / hist["Open"].iloc[0]
-                ) * 100
-                data.append((t, pct))
-        except Exception:
-            continue
-
-    df = pd.DataFrame(data, columns=["Ticker", "Pct"])
-    return df.sort_values("Pct", ascending=False).head(20)["Ticker"].tolist()
+    """
+    Placeholder for premarket gainer logic.
+    MUST return a list or the file will fallback safely.
+    """
+    return ["AAPL", "MSFT", "NVDA", "TSLA", "AMD"]
 
 
-# ---------------- LOAD / INIT DATAFRAME ---------------- #
+def get_price(ticker):
+    try:
+        data = yf.Ticker(ticker).history(period="1d", interval="1m")
+        if data.empty:
+            return None
+        return round(data["Close"].iloc[-1], 2)
+    except Exception as e:
+        print(f"Price fetch failed for {ticker}: {e}")
+        return None
+
+
+# =========================
+# FILE HANDLING
+# =========================
+
 def load_or_create_df():
     os.makedirs("data", exist_ok=True)
 
-    # ALWAYS create a base file if it doesn't exist
     if not os.path.exists(DATA_PATH):
-        tickers = get_top_20_gainers()
+        print("📄 Creating new Excel file")
 
+        tickers = get_top_20_gainers()
         if not tickers:
-            # Emergency fallback to prevent empty file
             tickers = ["AAPL", "MSFT", "NVDA"]
 
         df = pd.DataFrame({"Ticker": tickers})
@@ -90,49 +90,94 @@ def load_or_create_df():
 
         df.to_excel(DATA_PATH, index=False)
         print("✅ Excel file CREATED")
+
         return df
 
-    print("ℹ️ Excel file already exists")
+    print("ℹ️ Excel file exists — loading")
     return pd.read_excel(DATA_PATH)
-# ---------------- UPDATE PRICES ---------------- #
 
-def update_prices(df, current_time):
-    idx = TIMES.index(current_time)
 
-    for i, row in df.iterrows():
+# =========================
+# DATA UPDATES
+# =========================
+
+def update_prices(df, now):
+    base_col = "7:00 Price"
+
+    for idx, row in df.iterrows():
         ticker = row["Ticker"]
+        price = get_price(ticker)
 
-        try:
-            hist = yf.download(
-                ticker,
-                interval="15m",
-                period="1d",
-                prepost=True,
-                progress=False
-            )
-        except Exception as e:
-            print(f"Download failed for {ticker}: {e}")
+        if price is None:
             continue
 
-        if hist is None or hist.empty:
+        if pd.isna(row[base_col]):
+            df.at[idx, base_col] = price
             continue
 
-        price = hist["Close"].iloc[-1]
-        df.at[i, f"{current_time} Price"] = price
+        label = now.strftime("%H:%M")
+        price_col = f"{label} Price"
+        pct_col = f"{label} % Change"
 
-        # % change vs previous 15-min interval
-        if idx > 0:
-            prev_time = TIMES[idx - 1]
-            prev_price = row.get(f"{prev_time} Price")
+        if price_col not in df.columns:
+            return
 
-            if pd.notna(prev_price) and prev_price > 0:
-                pct = (price - prev_price) / prev_price * 100
-                df.at[i, f"% {prev_time}→{current_time}"] = round(pct, 2)
+        base_price = row[base_col]
+        pct_change = round(((price - base_price) / base_price) * 100, 2)
 
-        # Total % change from 6:00
-        open_price = row.get("06:00 Price")
-        if pd.notna(open_price) and open_price > 0:
-            total = (price - open_price) / open_price * 100
-            df.at[i, "TOTAL % 6:00→2:00"] = round(total, 2)
+        df.at[idx, price_col] = price
+        df.at[idx, pct_col] = pct_change
+
+
+def update_total_change(df):
+    for idx, row in df.iterrows():
+        base = row["7:00 Price"]
+
+        if pd.isna(base):
+            continue
+
+        latest_price = base
+
+        for t in reversed(TIMES):
+            col = f"{t.strftime('%H:%M')} Price"
+            if col in df.columns and not pd.isna(row[col]):
+                latest_price = row[col]
+                break
+
+        total_change = round(((latest_price - base) / base) * 100, 2)
+        df.at[idx, "Total % Change"] = total_change
+
+
+# =========================
+# MAIN
+# =========================
+
+def main():
+    now = datetime.now().time()
+    valid_times = [t for t in TIMES if t <= now]
+
+    if not valid_times:
+        print("⏳ Before tracking window — exiting safely")
+        return
+
+    now = max(valid_times)
+
+    df = load_or_create_df()
+    update_prices(df, now)
+    update_total_change(df)
+
+    os.makedirs("data", exist_ok=True)
+    df.to_excel(DATA_PATH, index=False)
+
+    assert os.path.exists(DATA_PATH), "❌ Excel file was NOT created"
+
+    print(f"✅ Excel saved: {DATA_PATH}")
+    print(f"⏱ Updated at {now.strftime('%H:%M')}")
+
+
+# =========================
+# ENTRY POINT
+# =========================
+
 if __name__ == "__main__":
     main()
