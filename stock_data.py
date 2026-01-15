@@ -75,28 +75,39 @@ def get_price(ticker):
 def load_or_create_df():
     os.makedirs("data", exist_ok=True)
 
-    if not os.path.exists(DATA_PATH):
-        print("📄 Creating new Excel file")
+    if os.path.exists(DATA_PATH):
+        try:
+            # 🚨 Force engine AND validate file
+            df = pd.read_excel(DATA_PATH, engine="openpyxl")
 
-        tickers = get_top_20_gainers()
-        if not tickers:
-            tickers = ["AAPL", "MSFT", "NVDA"]
+            if df.empty:
+                raise ValueError("Excel file is empty")
 
-        df = pd.DataFrame({"Ticker": tickers})
+            return df
 
-        for col in build_columns(TIMES):
-            if col != "Ticker":
-                df[col] = None
+        except Exception as e:
+            print(f"⚠️ Excel file corrupted — rebuilding: {e}")
+            os.remove(DATA_PATH)
 
-        df.to_excel(DATA_PATH, index=False)
-        print("✅ Excel file CREATED")
+    # -------- CREATE FRESH FILE --------
 
-        return df
+    print("📄 Creating new Excel file")
 
-    print("ℹ️ Excel file exists — loading")
-    return pd.read_excel(DATA_PATH)
+    tickers = get_top_20_gainers()
+    if not tickers:
+        tickers = ["AAPL", "MSFT", "NVDA"]
 
+    df = pd.DataFrame({"Ticker": tickers})
 
+    for col in build_columns(TIMES):
+        if col != "Ticker":
+            df[col] = None
+
+    # 🚨 FORCE REAL XLSX WRITE
+    df.to_excel(DATA_PATH, index=False, engine="openpyxl")
+
+    print("✅ Excel file created cleanly")
+    return df
 # =========================
 # DATA UPDATES
 # =========================
