@@ -71,22 +71,29 @@ def get_top_20_gainers():
 
 
 # ---------------- LOAD / INIT DATAFRAME ---------------- #
-
 def load_or_create_df():
-    if os.path.exists(DATA_PATH):
-        return pd.read_excel(DATA_PATH)
+    os.makedirs("data", exist_ok=True)
 
-    tickers = get_top_20_gainers()
-    df = pd.DataFrame({"Ticker": tickers})
+    # ALWAYS create a base file if it doesn't exist
+    if not os.path.exists(DATA_PATH):
+        tickers = get_top_20_gainers()
 
-    for col in build_columns(TIMES):
-        if col != "Ticker":
-            df[col] = None
+        if not tickers:
+            # Emergency fallback to prevent empty file
+            tickers = ["AAPL", "MSFT", "NVDA"]
 
-    df.to_excel(DATA_PATH, index=False)
-    return df
+        df = pd.DataFrame({"Ticker": tickers})
 
+        for col in build_columns(TIMES):
+            if col != "Ticker":
+                df[col] = None
 
+        df.to_excel(DATA_PATH, index=False)
+        print("✅ Excel file CREATED")
+        return df
+
+    print("ℹ️ Excel file already exists")
+    return pd.read_excel(DATA_PATH)
 # ---------------- UPDATE PRICES ---------------- #
 
 def update_prices(df, current_time):
