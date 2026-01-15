@@ -134,3 +134,5 @@ def update_prices(df, current_time):
         if pd.notna(open_price) and open_price > 0:
             total = (price - open_price) / open_price * 100
             df.at[i, "TOTAL % 6:00→2:00"] = round(total, 2)
+if __name__ == "__main__":
+    main()
