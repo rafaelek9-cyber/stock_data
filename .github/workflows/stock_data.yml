@@ -1,8 +1,8 @@
-name: Stock Data Momentum Tracker
+name: Stock Data Tracker
 
 on:
   schedule:
-    - cron: "0,15,30,45 10-18 * * 1-5"
+    - cron: "*/15 12-20 * * 1-5"   # Every 15 min, 6am–2pm EST (UTC 12–20)
   workflow_dispatch:
 
 jobs:
@@ -19,22 +19,23 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-  run: |
-    pip install yfinance pandas openpyxl
+        run: |
+          python -m pip install --upgrade pip
+          pip install yfinance pandas openpyxl pytz
 
-      - name: Run tracker
-        run: python stock_data.py
+      - name: Run stock tracker
+        run: |
+          python stock_data.py
 
       - name: Commit Excel updates
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "actions@github.com"
 
-            if [ -f data/stock_data.xlsx ]; then
-              git add data/stock_data.xlsx
-              git commit -m "Auto update stock data" || echo "No changes"
-              git push
-            else
-              echo "Excel file not created yet — skipping commit"
-              fi
-
+          if [ -f data/stock_data.xlsx ]; then
+            git add data/stock_data.xlsx
+            git commit -m "Auto update stock data" || echo "No changes"
+            git push
+          else
+            echo "Excel file not created yet — skipping commit"
+          fi
