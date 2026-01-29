@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 import yfinance as yf
-from datetime import datetime, time
+from datetime import datetime
 import openpyxl
 
 DATA_PATH = "data/stock_data.xlsx"
@@ -43,16 +43,20 @@ def get_top_20_gainers():
 
 
 def load_or_create_df():
+    # ALWAYS ensure folder exists
     os.makedirs("data", exist_ok=True)
 
+    # Try loading existing file
     if os.path.exists(DATA_PATH):
         try:
             df = pd.read_excel(DATA_PATH, engine="openpyxl")
             if not df.empty:
                 return df
         except Exception:
+            # Corrupt file → delete and recreate
             os.remove(DATA_PATH)
 
+    # Create new dataframe
     tickers = get_top_20_gainers()
     if not tickers:
         tickers = ["AAPL", "MSFT", "NVDA"]
@@ -63,6 +67,7 @@ def load_or_create_df():
         if col != "Ticker":
             df[col] = None
 
+    # SAVE FILE IMMEDIATELY
     df.to_excel(DATA_PATH, index=False, engine="openpyxl")
     return df
 
@@ -96,11 +101,15 @@ def momentum_flag(pct):
 
 
 def main():
-    now = datetime.now().strftime("%H:%M")
-    if now not in TIMES:
-        return
-
+    # ALWAYS load or create file FIRST
     df = load_or_create_df()
+
+    now = datetime.now().strftime("%H:%M")
+
+    # If run outside tracked times, still SAVE file
+    if now not in TIMES:
+        df.to_excel(DATA_PATH, index=False, engine="openpyxl")
+        return
 
     for i, ticker in enumerate(df["Ticker"]):
         price = get_price(ticker)
@@ -130,6 +139,7 @@ def main():
                 df.at[i, "FINAL PRICE"] = round(price, 2)
                 df.at[i, "TOTAL % 6:00→2:00"] = round(total, 2)
 
+    # ALWAYS save after processing
     df.to_excel(DATA_PATH, index=False, engine="openpyxl")
 
 
