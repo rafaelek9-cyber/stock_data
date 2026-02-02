@@ -5,141 +5,96 @@ from datetime import datetime
 import openpyxl
 
 DATA_PATH = "data/stock_data.xlsx"
-
-TIMES = [
-    "06:00", "06:15", "06:30", "06:45",
-    "07:00", "07:15", "07:30", "07:45",
-    "08:00", "08:15", "08:30", "08:45",
-    "09:00", "09:15", "09:30", "09:45",
-    "10:00", "10:15", "10:30", "10:45",
-    "11:00", "11:15", "11:30", "11:45",
-    "12:00", "12:15", "12:30", "12:45",
-    "13:00", "13:15", "13:30", "13:45",
-    "14:00"
-]
+TICKER_FILE = "tickers.txt"
 
 
-def build_columns(times):
-    cols = ["Ticker"]
-    for t in times:
-        cols.append(f"Price {t}")
-        cols.append(f"% Δ prev → {t}")
-        cols.append(f"Momentum {t}")
-    cols.append("FINAL PRICE")
-    cols.append("TOTAL % 6:00→2:00")
-    return cols
+def load_tickers():
+    if not os.path.exists(TICKER_FILE):
+        return ["AAPL", "MSFT", "NVDA"]
+
+    with open(TICKER_FILE) as f:
+        tickers = [line.strip().upper() for line in f if line.strip()]
+
+    return tickers[:20]
 
 
-def get_top_20_gainers():
-    try:
-        tickers = yf.Tickers(" ".join([
-            "AAPL", "MSFT", "NVDA", "AMD", "TSLA", "META", "AMZN",
-            "COIN", "RIOT", "MARA", "SMCI", "PLTR", "SOFI", "AI",
-            "UPST", "CVNA", "AFRM", "RBLX", "DKNG", "SHOP"
-        ]))
-        return list(tickers.tickers.keys())[:20]
-    except Exception:
-        return []
-
-
-def load_or_create_df():
-    # ALWAYS ensure folder exists
+def load_or_create_df(tickers):
     os.makedirs("data", exist_ok=True)
 
-    # Try loading existing file
+    columns = [
+        "Ticker",
+        "Date",
+        "Open",
+        "High",
+        "Low",
+        "Close",
+        "Volume",
+        "% Change"
+    ]
+
     if os.path.exists(DATA_PATH):
         try:
             df = pd.read_excel(DATA_PATH, engine="openpyxl")
             if not df.empty:
                 return df
         except Exception:
-            # Corrupt file → delete and recreate
             os.remove(DATA_PATH)
 
-    # Create new dataframe
-    tickers = get_top_20_gainers()
-    if not tickers:
-        tickers = ["AAPL", "MSFT", "NVDA"]
-
-    df = pd.DataFrame({"Ticker": tickers})
-
-    for col in build_columns(TIMES):
-        if col != "Ticker":
-            df[col] = None
-
-    # SAVE FILE IMMEDIATELY
+    df = pd.DataFrame(columns=columns)
     df.to_excel(DATA_PATH, index=False, engine="openpyxl")
     return df
 
 
-def get_price(ticker):
+def get_eod_data(ticker):
     try:
         data = yf.download(
             ticker,
             period="1d",
-            interval="1m",
-            progress=False,
-            prepost=True
+            interval="1d",
+            progress=False
         )
-        return float(data["Close"].iloc[-1])
+
+        if data.empty:
+            return None
+
+        row = data.iloc[-1]
+        pct_change = ((row["Close"] - row["Open"]) / row["Open"]) * 100
+
+        return {
+            "Open": round(row["Open"], 2),
+            "High": round(row["High"], 2),
+            "Low": round(row["Low"], 2),
+            "Close": round(row["Close"], 2),
+            "Volume": int(row["Volume"]),
+            "% Change": round(pct_change, 2)
+        }
+
     except Exception:
         return None
 
 
-def momentum_flag(pct):
-    if pct is None:
-        return ""
-    if pct > 2:
-        return "🚀 STRONG"
-    if pct > 0.5:
-        return "⬆️ UP"
-    if pct < -2:
-        return "🔻 STRONG DOWN"
-    if pct < -0.5:
-        return "⬇️ DOWN"
-    return "➖ FLAT"
-
-
 def main():
-    # ALWAYS load or create file FIRST
-    df = load_or_create_df()
+    tickers = load_tickers()
+    df = load_or_create_df(tickers)
 
-    now = datetime.now().strftime("%H:%M")
+    today = datetime.now().strftime("%Y-%m-%d")
+    rows = []
 
-    # If run outside tracked times, still SAVE file
-    if now not in TIMES:
-        df.to_excel(DATA_PATH, index=False, engine="openpyxl")
-        return
-
-    for i, ticker in enumerate(df["Ticker"]):
-        price = get_price(ticker)
-        if price is None:
+    for ticker in tickers:
+        data = get_eod_data(ticker)
+        if not data:
             continue
 
-        price_col = f"Price {now}"
-        pct_col = f"% Δ prev → {now}"
-        mom_col = f"Momentum {now}"
+        rows.append({
+            "Ticker": ticker,
+            "Date": today,
+            **data
+        })
 
-        prev_time = TIMES[TIMES.index(now) - 1] if TIMES.index(now) > 0 else None
-        prev_price = df.at[i, f"Price {prev_time}"] if prev_time else None
+    if rows:
+        new_df = pd.DataFrame(rows)
+        df = pd.concat([df, new_df], ignore_index=True)
 
-        df.at[i, price_col] = round(price, 2)
-
-        pct = None
-        if prev_price:
-            pct = ((price - prev_price) / prev_price) * 100
-            df.at[i, pct_col] = round(pct, 2)
-
-        df.at[i, mom_col] = momentum_flag(pct)
-
-        if now == "14:00":
-            open_price = df.at[i, "Price 06:00"]
-            if open_price:
-                total = ((price - open_price) / open_price) * 100
-                df.at[i, "FINAL PRICE"] = round(price, 2)
-                df.at[i, "TOTAL % 6:00→2:00"] = round(total, 2)
-
-    # ALWAYS save after processing
     df.to_excel(DATA_PATH, index=False, engine="openpyxl")
 
 
